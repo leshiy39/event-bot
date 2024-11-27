@@ -137,7 +137,7 @@ def main():
                             user_states.pop(chat_id, None)
                             welcome_message = ("Привет! Это твой бот для участия в розыгрыше ☺️\n"
                                             "Мы попросим тебя ответить на несколько вопросов, чтобы зафиксировать твою активность.\n"
-                                            "В 15:00 с помощью генератора случайных чисел мы выберем победителей.\n"
+                                            "В 14:00 с помощью генератора случайных чисел мы выберем победителей.\n"
                                             "Поехали?")
                             send_message_with_button(chat_id, welcome_message, [
                                 {"text": "Да", "action": "continue_dialog"},
@@ -155,9 +155,9 @@ def main():
                                     send_message(chat_id, "Не указан номер победителя")
                                 else:
                                     counter = text.split()[1]
-                                    winner_nickname, winner_chat_id = get_winner(counter)
-                                    send_message(f"{chat_id}", f"Победитель: {winner_nickname}")
-                                    send_message(f"{winner_chat_id}", f"Поздравляем! Вы победили! Ваш номер: {counter}")
+                                    winner_nickname, winner_chat_id, winner_name = get_winner(counter)
+                                    send_message(f"{chat_id}", f"Победитель: {winner_name} (@{winner_nickname})")
+                                    # send_message(f"{winner_chat_id}", f"Поздравляем! Вы победили! Ваш номер: {counter}")
                             except Exception as e:
                                 print(f"Произошла ошибка: {e}")
                         else:

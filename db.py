@@ -151,7 +151,7 @@ def get_winner(counter):
 
         # SQL-запрос для получения максимального значения в столбце "counter"
         query = """
-        SELECT chat_id, tg_nickname FROM participants where counter = %s;
+        SELECT chat_id, tg_nickname, tg_user FROM participants where counter = %s;
         """
         cursor.execute(query, counter)
         result = cursor.fetchone()
@@ -163,7 +163,7 @@ def get_winner(counter):
 
         # Возвращаем максимальное значение
         if result:
-            return result[1], result[0]
+            return result[1], result[0], result[2]
         else:
             print("В таблице participants нет значений в столбце counter.")
             return 0
