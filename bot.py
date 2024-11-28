@@ -14,6 +14,18 @@ from tg import *
 from files import *
 
 
+def init(chat_id, user_states):
+    user_states = {}
+    user_states.pop(chat_id, None)
+    welcome_message = ("Привет! Это твой бот для участия в розыгрыше ☺️\n"
+                    "Мы попросим тебя ответить на несколько вопросов, чтобы зафиксировать твою активность.\n"
+                    "В 14:00 с помощью генератора случайных чисел мы выберем победителей.\n"
+                    "Поехали?")
+    send_message_with_button(chat_id, welcome_message, [
+        {"text": "Да", "action": "continue_dialog"},
+        {"text": "Нет", "action": "decline_dialog"}
+    ])
+
 # Основной цикл бота
 def main():
     print("Инициализация базы данных...")
@@ -21,19 +33,30 @@ def main():
 
     print("Бот запущен...")
     offset = None
+    chat_id=''
     user_states = {}
     waiting_for_quiz = {}
-    try:
-        while True:
+    while True:
+        try:    
             try:
                 updates = get_updates(offset)
+                print(updates)
             except RequestException as e:
                 print(f"Ошибка при запросе к Telegram API: {e}")
             if updates.get("ok"):
                 for update in updates.get("result", []):
                     offset = update["update_id"] + 1
                     # Обработка callback_query
+                    if "kicked" in str(update):
+                        print(f"Бот был заблокирован {update}")
+                        break
+                    if "edited_message" in update:
+                        chat_id = update["edited_message"]["chat"]["id"]
+                        print('edited')
+                        send_message(chat_id, "Простите, но я не умею работать с отредактированными сообщениями. Вынужден сбросить нашу сессию и давайте начнем заново через /start")
+                        break
                     if "callback_query" in update:
+                        print('callback_query')
                         callback_query = update["callback_query"]
                         chat_id = callback_query["message"]["chat"]["id"]
                         tg_id = callback_query["from"]["id"]
@@ -42,6 +65,9 @@ def main():
                         if user_exists(chat_id, tg_id): 
                             break
                         else:
+                            print(update)
+                            if "/start" in str(update):
+                                init(chat_id, user_states)
                             if chat_id in waiting_for_quiz:
                                 process_answer, quiz_state = waiting_for_quiz[chat_id]
                                 result = process_answer(data)
@@ -75,14 +101,14 @@ def main():
                             # elif data.startswith("d1_"):
 
                     elif "document" in update["message"]:
-                        chat_id = update["message"]["chat"]["id"]
+                        # chat_id = update["message"]["chat"]["id"]
                         tg_id = update["message"]["from"]["id"]
                         tg_nickname = update["message"]["from"].get("username", "None")
                         file_id = update["message"]["document"]["file_id"]
 
                         # Сохраняем файл и обновляем информацию о пользователе
                         try: 
-                            save_resume(chat_id, tg_id, tg_nickname, file_id)
+                            save_resume(tg_id, tg_id, tg_nickname, file_id)
                         except Exception as e:
                             print(f"Ошибка при сохранении резюме: {e}")
                             send_message(chat_id, "Произошла ошибка при сохранении резюме. Пожалуйста, попробуйте ещё раз.")
@@ -90,13 +116,31 @@ def main():
                         chat_id = update["message"]["chat"]["id"]
                         tg_id = update["message"]["from"]["id"]
                         send_message(chat_id, "Пожалуйста, отправьте ваш резюме в виде файла.")
-
                     # Обработка текстовых сообщений
                     elif "message" in update:
                         chat_id = update["message"]["chat"]["id"]
                         text = update["message"].get("text", "").strip()
+                        if text == "/start":
+                            init(chat_id, user_states)
+                        elif text == "/count" and chat_id in admin_ids:
+                            users_amount = count_users()
+                            send_message(chat_id, f"Количество участников: {users_amount}")
 
-                        if chat_id in user_states:
+                        elif "/winner" in text and chat_id in admin_ids:
+                            try:
+                                chat_id = update["message"]["chat"]["id"]
+                                if text == "/winner":
+                                    send_message(chat_id, "Не указан номер победителя")
+                                else:
+                                    counter = text.split()[1]
+                                    winner_nickname, winner_chat_id, winner_name = get_winner(counter)
+                                    send_message(f"{chat_id}", f"Победитель: {winner_name} (@{winner_nickname})")
+                                    # send_message(f"{winner_chat_id}", f"Поздравляем! Вы победили! Ваш номер: {counter}")
+                            except Exception as e:
+                                print(f"Произошла ошибка: {e}")
+                                chat_id = update["message"]["chat"]["id"]
+                                user_states.pop(chat_id, None)
+                        elif chat_id in user_states:
                             state_info = user_states[chat_id]
                             tg_id = state_info["tg_id"]
                             state = state_info["state"]
@@ -125,47 +169,22 @@ def main():
 
                             elif state == "waiting_for_interest_other":
                                 update_participant(tg_id, "interests", text)
-                                # send_message(chat_id, "Спасибо! Все данные записаны. 🎉")
-                                # user_states.pop(chat_id)
                             elif chat_id in waiting_for_quiz:
                                 process_answer = waiting_for_quiz[chat_id]
                                 process_answer(data)
                                 if current_question["index"] >= len(d1_questions):
                                     waiting_for_quiz.pop(chat_id)
 
-                        elif text == "/start":
-                            user_states.pop(chat_id, None)
-                            welcome_message = ("Привет! Это твой бот для участия в розыгрыше ☺️\n"
-                                            "Мы попросим тебя ответить на несколько вопросов, чтобы зафиксировать твою активность.\n"
-                                            "В 14:00 с помощью генератора случайных чисел мы выберем победителей.\n"
-                                            "Поехали?")
-                            send_message_with_button(chat_id, welcome_message, [
-                                {"text": "Да", "action": "continue_dialog"},
-                                {"text": "Нет", "action": "decline_dialog"}
-                            ])
-
-                        elif text == "/count" and chat_id in admin_ids:
-                            users_amount = count_users()
-                            send_message(chat_id, f"Количество участников: {users_amount}")
-
-                        elif "/winner" in text and chat_id in admin_ids:
-                            try:
-                                chat_id = update["message"]["chat"]["id"]
-                                if text == "/winner":
-                                    send_message(chat_id, "Не указан номер победителя")
-                                else:
-                                    counter = text.split()[1]
-                                    winner_nickname, winner_chat_id, winner_name = get_winner(counter)
-                                    send_message(f"{chat_id}", f"Победитель: {winner_name} (@{winner_nickname})")
-                                    # send_message(f"{winner_chat_id}", f"Поздравляем! Вы победили! Ваш номер: {counter}")
-                            except Exception as e:
-                                print(f"Произошла ошибка: {e}")
                         else:
                             send_message(chat_id, "Я не знаю такой команды 😢")
+                    else:
+                        print(f"Произошла ошибка: {e}")
+                        user_states.pop(chat_id, None)
+
             time.sleep(1)
-    except Exception as e:
-        print(f"Произошла ошибка: {e}")
-        user_states.pop(chat_id, None)
+        except Exception as e:
+            print(f"Произошла ошибка: {e}")
+            user_states.pop(chat_id, None)
 
 if __name__ == "__main__":
     main()
