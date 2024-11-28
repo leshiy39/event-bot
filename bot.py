@@ -180,7 +180,6 @@ def main():
                     else:
                         print(f"Произошла ошибка: {e}")
                         user_states.pop(chat_id, None)
-
             time.sleep(1)
         except Exception as e:
             print(f"Произошла ошибка: {e}")
